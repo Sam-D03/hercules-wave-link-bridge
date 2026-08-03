@@ -220,6 +220,16 @@ internal sealed class LiveAudioMeterService : IDisposable
                 continue;
             }
 
+            if (IsOutputSlot(slot))
+            {
+                var outputBinding = TryCreateEndpointBinding(slot.ChannelId, disposables);
+                slotBindings[index] = outputBinding;
+                summaries[index] = outputBinding is null
+                    ? $"{index + 1}:{slot.ChannelName}=output-missing"
+                    : $"{index + 1}:{slot.ChannelName}={outputBinding.Name}";
+                continue;
+            }
+
             var manualOverride = settings.MeterOverrideFor(index);
             if (!string.IsNullOrWhiteSpace(manualOverride))
             {
@@ -344,6 +354,29 @@ internal sealed class LiveAudioMeterService : IDisposable
         catch (Exception ex)
         {
             _logger.Warn($"Could not bind live System meter to default Windows output: {ex.Message}");
+            return null;
+        }
+    }
+
+    private MeterBinding? TryCreateEndpointBinding(string? deviceId, List<IDisposable> disposables)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return null;
+        }
+
+        try
+        {
+            var device = _enumerator.GetDevice(deviceId);
+            disposables.Add(device);
+            var meter = device.AudioMeterInformation;
+            return new MeterBinding(
+                $"Output: {device.FriendlyName}",
+                () => SafePeak(meter));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"Could not bind live output meter to {deviceId}: {ex.Message}");
             return null;
         }
     }
@@ -506,6 +539,9 @@ internal sealed class LiveAudioMeterService : IDisposable
 
     private static bool IsSystemSlot(ChannelSlot slot) =>
         slot.ChannelName.Equals("System", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsOutputSlot(ChannelSlot slot) =>
+        slot.ChannelType.Equals("Output", StringComparison.OrdinalIgnoreCase);
 
     private static bool MatchesSlot(ChannelSlot slot, SessionCandidate candidate)
     {

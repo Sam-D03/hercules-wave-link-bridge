@@ -11,9 +11,9 @@
     <RootNamespace>HerculesWaveBridge</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\..\assets\hercules-wave-bridge.ico</ApplicationIcon>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <Product>Hercules Wave Bridge</Product>
     <Description>Use a Hercules Stream 100 as a physical controller for Elgato Wave Link.</Description>
     <RepositoryUrl>https://github.com/Sam-D03/hercules-wave-link-bridge</RepositoryUrl>

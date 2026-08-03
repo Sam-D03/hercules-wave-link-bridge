@@ -15,8 +15,15 @@ internal sealed record AtlasLiveSettings(
     string? MeterOverride0,
     string? MeterOverride1,
     string? MeterOverride2,
-    string? MeterOverride3)
+    string? MeterOverride3,
+    string? EncoderTarget0,
+    string? EncoderTarget1,
+    string? EncoderTarget2,
+    string? EncoderTarget3)
 {
+    public const string ChannelEncoderTarget = "channel";
+    public const string PersonalMixOutput1EncoderTarget = "personal-mix-output-1";
+
     public static AtlasLiveSettings Default { get; } = new(
         "stereo",
         "bars",
@@ -30,7 +37,11 @@ internal sealed record AtlasLiveSettings(
         string.Empty,
         string.Empty,
         string.Empty,
-        string.Empty);
+        string.Empty,
+        ChannelEncoderTarget,
+        ChannelEncoderTarget,
+        ChannelEncoderTarget,
+        ChannelEncoderTarget);
 
     public string MeterOverrideFor(int index) => index switch
     {
@@ -54,8 +65,35 @@ internal sealed record AtlasLiveSettings(
         };
     }
 
+    public string EncoderTargetFor(int index) => NormalizeEncoderTarget(index switch
+    {
+        0 => EncoderTarget0,
+        1 => EncoderTarget1,
+        2 => EncoderTarget2,
+        3 => EncoderTarget3,
+        _ => ChannelEncoderTarget
+    });
+
+    public AtlasLiveSettings WithEncoderTarget(int index, string? target)
+    {
+        var normalized = NormalizeEncoderTarget(target);
+        return index switch
+        {
+            0 => this with { EncoderTarget0 = normalized },
+            1 => this with { EncoderTarget1 = normalized },
+            2 => this with { EncoderTarget2 = normalized },
+            3 => this with { EncoderTarget3 = normalized },
+            _ => this
+        };
+    }
+
     public static string NormalizeOverride(string? value) =>
         string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
+
+    public static string NormalizeEncoderTarget(string? value) =>
+        string.Equals(value, PersonalMixOutput1EncoderTarget, StringComparison.OrdinalIgnoreCase)
+            ? PersonalMixOutput1EncoderTarget
+            : ChannelEncoderTarget;
 }
 
 internal sealed class AtlasLiveSettingsStore
@@ -99,7 +137,7 @@ internal sealed class AtlasLiveSettingsStore
             Save(next);
         }
 
-        Logger.Info($"Atlas live settings updated: mode={next.MeterMode}, shape={next.Shape}, color={next.ColorMode}, solid={next.SolidColor}, gradient={next.GradientStart}->{next.GradientEnd}, vuGain={next.VuGain:0.##}x, vuRefresh={next.VuRefresh:0.###}s, knobSensitivity={next.KnobSensitivityLevel}, meterOverrides=[{next.MeterOverrideFor(0)}, {next.MeterOverrideFor(1)}, {next.MeterOverrideFor(2)}, {next.MeterOverrideFor(3)}].");
+        Logger.Info($"Atlas live settings updated: mode={next.MeterMode}, shape={next.Shape}, color={next.ColorMode}, solid={next.SolidColor}, gradient={next.GradientStart}->{next.GradientEnd}, vuGain={next.VuGain:0.##}x, vuRefresh={next.VuRefresh:0.###}s, knobSensitivity={next.KnobSensitivityLevel}, meterOverrides=[{next.MeterOverrideFor(0)}, {next.MeterOverrideFor(1)}, {next.MeterOverrideFor(2)}, {next.MeterOverrideFor(3)}], encoderTargets=[{next.EncoderTargetFor(0)}, {next.EncoderTargetFor(1)}, {next.EncoderTargetFor(2)}, {next.EncoderTargetFor(3)}].");
         SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -168,7 +206,11 @@ internal sealed class AtlasLiveSettingsStore
             AtlasLiveSettings.NormalizeOverride(settings.MeterOverride0),
             AtlasLiveSettings.NormalizeOverride(settings.MeterOverride1),
             AtlasLiveSettings.NormalizeOverride(settings.MeterOverride2),
-            AtlasLiveSettings.NormalizeOverride(settings.MeterOverride3));
+            AtlasLiveSettings.NormalizeOverride(settings.MeterOverride3),
+            AtlasLiveSettings.NormalizeEncoderTarget(settings.EncoderTarget0),
+            AtlasLiveSettings.NormalizeEncoderTarget(settings.EncoderTarget1),
+            AtlasLiveSettings.NormalizeEncoderTarget(settings.EncoderTarget2),
+            AtlasLiveSettings.NormalizeEncoderTarget(settings.EncoderTarget3));
     }
 
     private static bool IsOneOf(string? value, params string[] allowed)

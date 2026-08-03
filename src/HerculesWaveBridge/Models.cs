@@ -16,6 +16,27 @@ internal sealed record ChannelSlot(
     public static ChannelSlot Empty(int index) => new(index, null, "Empty", string.Empty, 0, false, false);
 }
 
+internal sealed record WaveOutputTarget(
+    string OutputDeviceId,
+    string OutputId,
+    string OutputName,
+    string MixId,
+    string MixName,
+    double Volume01,
+    bool IsMuted,
+    bool IsActive)
+{
+    public static WaveOutputTarget Empty { get; } = new(
+        string.Empty,
+        string.Empty,
+        "Audio Output 1 unavailable",
+        string.Empty,
+        "Personal Mix",
+        0,
+        false,
+        false);
+}
+
 internal sealed record LiveMeterSnapshot(
     int SlotIndex,
     double SourcePeak01,

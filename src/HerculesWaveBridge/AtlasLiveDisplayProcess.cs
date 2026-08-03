@@ -229,7 +229,7 @@ internal sealed class AtlasLiveDisplayProcess : IDisposable
                 _logger.Info($"Atlas Live native VU settings changed: mode={settings.MeterMode}, shape={settings.Shape}, color={settings.ColorMode}, vuRefresh={settings.VuRefresh:0.###}s.");
             }
 
-            var slots = NormalizeSlots(_controller.Slots);
+            var slots = NormalizeSlots(_controller.DisplaySlots);
             if (now - lastMeterBindingRefresh >= MeterBindingRefresh)
             {
                 liveMeters.RefreshBindings(slots, settings);

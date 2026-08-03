@@ -19,6 +19,9 @@ internal sealed class BridgeController : IDisposable
     private readonly bool[] _volumeWriteActive = new bool[4];
     private readonly long[] _lastKnobTurnTicks = new long[4];
     private ChannelSlot[] _slots = Enumerable.Range(0, 4).Select(ChannelSlot.Empty).ToArray();
+    private WaveOutputTarget _personalMixOutput1 = WaveOutputTarget.Empty;
+    private double? _pendingOutputVolumeWrite;
+    private bool _outputVolumeWriteActive;
     private BridgeStatus _status = new(false, false, "Not connected", "Starting");
     private bool _refreshInProgress;
     private bool _hardwareReconnectInProgress;
@@ -55,6 +58,50 @@ internal sealed class BridgeController : IDisposable
             lock (_lock)
             {
                 return _slots.ToArray();
+            }
+        }
+    }
+
+    public IReadOnlyList<ChannelSlot> DisplaySlots
+    {
+        get
+        {
+            lock (_lock)
+            {
+                var slots = _slots.ToArray();
+                for (var index = 0; index < slots.Length; index++)
+                {
+                    if (!IsPersonalMixOutput1Mapped(index))
+                    {
+                        continue;
+                    }
+
+                    slots[index] = _personalMixOutput1.IsActive
+                        ? new ChannelSlot(
+                            index,
+                            _personalMixOutput1.OutputDeviceId,
+                            "Personal Out 1",
+                            _personalMixOutput1.MixId,
+                            _personalMixOutput1.Volume01,
+                            _personalMixOutput1.IsMuted,
+                            true,
+                            AppMatchText: _personalMixOutput1.OutputName,
+                            ChannelType: "Output")
+                        : ChannelSlot.Empty(index) with { ChannelName = "Personal Out 1" };
+                }
+
+                return slots;
+            }
+        }
+    }
+
+    public WaveOutputTarget PersonalMixOutput1
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _personalMixOutput1;
             }
         }
     }
@@ -102,11 +149,15 @@ internal sealed class BridgeController : IDisposable
         try
         {
             var slots = (await _waveLink.GetChannelSlotsAsync(cancellationToken).ConfigureAwait(false)).ToArray();
+            var personalMixOutput1 = await _waveLink.GetPersonalMixOutput1Async(cancellationToken).ConfigureAwait(false);
             bool slotsChanged;
+            bool outputChanged;
             lock (_lock)
             {
                 slotsChanged = !_slots.SequenceEqual(slots);
+                outputChanged = _personalMixOutput1 != personalMixOutput1;
                 _slots = slots;
+                _personalMixOutput1 = personalMixOutput1;
             }
 
             var statusChanged = UpdateStatus(waveLinkConnected: true, lastError: string.Empty);
@@ -115,8 +166,15 @@ internal sealed class BridgeController : IDisposable
                 LogChannelMapping(slots);
             }
 
-            if (slotsChanged || statusChanged)
+
+            if (outputChanged)
             {
+                LogOutputMapping(personalMixOutput1);
+            }
+
+            if (slotsChanged || outputChanged || statusChanged)
+            {
+                StateChanged?.Invoke(this, EventArgs.Empty);
                 await RenderDisplayAsync(cancellationToken).ConfigureAwait(false);
             }
         }
@@ -203,10 +261,38 @@ internal sealed class BridgeController : IDisposable
 
     private async Task HandleKnobTurnAsync(KnobTurn turn, CancellationToken cancellationToken)
     {
+        var index = Math.Clamp(turn.Index, 0, 3);
+        if (IsPersonalMixOutput1Mapped(index))
+        {
+            WaveOutputTarget nextTarget;
+            lock (_lock)
+            {
+                var target = _personalMixOutput1;
+                if (!target.IsActive)
+                {
+                    return;
+                }
+
+                var step = GetAcceleratedKnobStep(index);
+                var next = Math.Clamp(target.Volume01 + (turn.Delta * step), 0, 1);
+                if (Math.Abs(next - target.Volume01) < 0.0001)
+                {
+                    return;
+                }
+
+                nextTarget = target with { Volume01 = next };
+                _personalMixOutput1 = nextTarget;
+            }
+
+            StateChanged?.Invoke(this, EventArgs.Empty);
+            QueueOutputVolumeWrite(nextTarget.Volume01);
+            return;
+        }
+
         ChannelSlot nextSlot;
         lock (_lock)
         {
-            var slot = _slots[Math.Clamp(turn.Index, 0, 3)];
+            var slot = _slots[index];
             if (!slot.IsActive)
             {
                 return;
@@ -230,7 +316,27 @@ internal sealed class BridgeController : IDisposable
 
     private async Task HandleKnobPressAsync(KnobPress press, CancellationToken cancellationToken)
     {
-        var slot = GetSlot(press.Index);
+        var index = Math.Clamp(press.Index, 0, 3);
+        if (IsPersonalMixOutput1Mapped(index))
+        {
+            WaveOutputTarget target;
+            lock (_lock)
+            {
+                target = _personalMixOutput1;
+                if (!target.IsActive)
+                {
+                    return;
+                }
+
+                _personalMixOutput1 = target with { IsMuted = !target.IsMuted };
+            }
+
+            StateChanged?.Invoke(this, EventArgs.Empty);
+            await _waveLink.SetOutputMuteAsync(target, !target.IsMuted, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var slot = GetSlot(index);
         if (!slot.IsActive)
         {
             return;
@@ -298,6 +404,64 @@ internal sealed class BridgeController : IDisposable
 
             _logger.Error(ex, $"Volume write loop failed for slot {index + 1}");
             UpdateStatus(lastError: $"Volume write: {ex.Message}");
+        }
+    }
+
+    private void QueueOutputVolumeWrite(double volume01)
+    {
+        lock (_volumeWriteLock)
+        {
+            _pendingOutputVolumeWrite = volume01;
+            if (_outputVolumeWriteActive)
+            {
+                return;
+            }
+
+            _outputVolumeWriteActive = true;
+        }
+
+        _ = Task.Run(OutputVolumeWriteLoopAsync, CancellationToken.None);
+    }
+
+    private async Task OutputVolumeWriteLoopAsync()
+    {
+        try
+        {
+            await Task.Delay(VolumeWriteCoalesceDelay).ConfigureAwait(false);
+
+            while (true)
+            {
+                double volume;
+                lock (_volumeWriteLock)
+                {
+                    if (_pendingOutputVolumeWrite is not { } pending)
+                    {
+                        _outputVolumeWriteActive = false;
+                        return;
+                    }
+
+                    volume = pending;
+                    _pendingOutputVolumeWrite = null;
+                }
+
+                var target = PersonalMixOutput1;
+                if (target.IsActive)
+                {
+                    await _waveLink.SetOutputVolumeAsync(target, volume, CancellationToken.None).ConfigureAwait(false);
+                }
+
+                await Task.Delay(VolumeWriteCoalesceDelay).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            lock (_volumeWriteLock)
+            {
+                _outputVolumeWriteActive = false;
+            }
+
+            _logger.Error(ex, "Personal Mix Audio Output 1 volume write loop failed");
+            UpdateStatus(lastError: $"Output volume write: {ex.Message}");
         }
     }
 
@@ -446,6 +610,16 @@ internal sealed class BridgeController : IDisposable
     {
         _logger.Info("Mapped Wave Link channels: " + string.Join(", ", slots.Select(slot => slot.IsActive ? $"{slot.Index + 1}:{slot.ChannelName} ({slot.ChannelId}/{slot.MixId})" : $"{slot.Index + 1}:empty")));
     }
+
+    private void LogOutputMapping(WaveOutputTarget target)
+    {
+        _logger.Info(target.IsActive
+            ? $"Mapped Personal Mix Audio Output 1: {target.OutputName} ({target.OutputDeviceId}/{target.OutputId}); level={target.Volume01:0.00}; muted={target.IsMuted}."
+            : "Personal Mix Audio Output 1 is not currently routed to an output device.");
+    }
+
+    private bool IsPersonalMixOutput1Mapped(int index) =>
+        _settings.Current.EncoderTargetFor(index) == AtlasLiveSettings.PersonalMixOutput1EncoderTarget;
 
     private double GetAcceleratedKnobStep(int index)
     {

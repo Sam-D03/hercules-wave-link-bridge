@@ -40,6 +40,7 @@ internal sealed class TrayAppContext : ApplicationContext
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _vuMenu;
     private readonly ToolStripMenuItem _meterMapMenu;
+    private readonly ToolStripMenuItem _encoderMapMenu;
     private readonly ToolStripMenuItem _knobMenu;
     private readonly ToolStripMenuItem _backgroundMenu;
     private readonly ToolStripMenuItem _startupItem;
@@ -67,6 +68,7 @@ internal sealed class TrayAppContext : ApplicationContext
             {
                 UpdateVuMenu();
                 UpdateMeterMapMenu();
+                UpdateEncoderMapMenu();
                 UpdateKnobMenu();
             }
         };
@@ -74,6 +76,7 @@ internal sealed class TrayAppContext : ApplicationContext
         _statusItem = new ToolStripMenuItem("Starting...") { Enabled = false };
         _vuMenu = new ToolStripMenuItem("VU Meter");
         _meterMapMenu = new ToolStripMenuItem("Live Meter Mapping");
+        _encoderMapMenu = new ToolStripMenuItem("Encoder Mapping");
         _knobMenu = new ToolStripMenuItem("Knob Sensitivity");
         _backgroundMenu = new ToolStripMenuItem("Background");
         _startupItem = new ToolStripMenuItem("Start on System Startup")
@@ -88,6 +91,8 @@ internal sealed class TrayAppContext : ApplicationContext
         _vuMenu.DropDown.Closing += KeepMenuOpenOnPersistentItemClick;
         _meterMapMenu.DropDownOpening += (_, _) => UpdateMeterMapMenu();
         _meterMapMenu.DropDown.Closing += KeepMenuOpenOnPersistentItemClick;
+        _encoderMapMenu.DropDownOpening += (_, _) => UpdateEncoderMapMenu();
+        _encoderMapMenu.DropDown.Closing += KeepMenuOpenOnPersistentItemClick;
         _knobMenu.DropDown.Closing += KeepMenuOpenOnPersistentItemClick;
         _backgroundMenu.DropDownOpening += (_, _) => UpdateBackgroundMenu();
         _backgroundMenu.DropDown.Closing += KeepMenuOpenOnPersistentItemClick;
@@ -105,6 +110,7 @@ internal sealed class TrayAppContext : ApplicationContext
         }));
         _menu.Items.Add(_vuMenu);
         _menu.Items.Add(_meterMapMenu);
+        _menu.Items.Add(_encoderMapMenu);
         _menu.Items.Add(_knobMenu);
         _menu.Items.Add(_backgroundMenu);
         _menu.Items.Add(_startupItem);
@@ -134,6 +140,7 @@ internal sealed class TrayAppContext : ApplicationContext
         _timer.Start();
         UpdateVuMenu();
         UpdateMeterMapMenu();
+        UpdateEncoderMapMenu();
         UpdateKnobMenu();
         UpdateBackgroundMenu();
         UpdateStartupMenu();
@@ -182,10 +189,16 @@ internal sealed class TrayAppContext : ApplicationContext
         _statusItem.DropDownItems.Clear();
         foreach (var slot in slots)
         {
+            var target = _atlasSettings.Current.EncoderTargetFor(slot.Index);
             _statusItem.DropDownItems.Add(slot.IsActive
-                ? $"{slot.Index + 1}. {slot.ChannelName} {Math.Round(slot.Volume01 * 100):0}% {(slot.IsMuted ? "muted" : "")}"
+                ? $"{slot.Index + 1}. {slot.ChannelName} {Math.Round(slot.Volume01 * 100):0}% {(slot.IsMuted ? "muted" : "")} - encoder: {(target == AtlasLiveSettings.PersonalMixOutput1EncoderTarget ? "Personal Mix Output 1" : "channel")}"
                 : $"{slot.Index + 1}. Empty");
         }
+
+        var output = _controller.PersonalMixOutput1;
+        _statusItem.DropDownItems.Add(output.IsActive
+            ? $"Personal Mix Output 1: {output.OutputName} {Math.Round(output.Volume01 * 100):0}% {(output.IsMuted ? "muted" : "")}"
+            : "Personal Mix Output 1: not routed");
 
         _statusItem.DropDownItems.Add($"Display: {_displayProcess.StatusText}");
         _statusItem.DropDownItems.Add($"Background: {_backgroundImages.CurrentLabel}");
@@ -358,6 +371,45 @@ internal sealed class TrayAppContext : ApplicationContext
             "Level 5 - 4x",
             settings.KnobSensitivityLevel == 5,
             () => _atlasSettings.Update(s => s with { KnobSensitivityLevel = 5 })));
+    }
+
+    private void UpdateEncoderMapMenu()
+    {
+        var settings = _atlasSettings.Current;
+        var slots = _controller.Slots;
+        var output = _controller.PersonalMixOutput1;
+        _encoderMapMenu.DropDownItems.Clear();
+
+        var note = _encoderMapMenu.DropDownItems.Add("Press toggles mute for the selected target");
+        note.Enabled = false;
+        _encoderMapMenu.DropDownItems.Add(new ToolStripSeparator());
+
+        for (var index = 0; index < 4; index++)
+        {
+            var slot = index < slots.Count ? slots[index] : ChannelSlot.Empty(index);
+            var current = settings.EncoderTargetFor(index);
+            var currentLabel = current == AtlasLiveSettings.PersonalMixOutput1EncoderTarget
+                ? "Personal Mix Output 1"
+                : $"Channel {index + 1}";
+            var encoderMenu = new ToolStripMenuItem($"Encoder {index + 1} - {currentLabel}");
+            WirePersistentDropDown(encoderMenu);
+            var encoderIndex = index;
+
+            encoderMenu.DropDownItems.Add(MakeCheckedItem(
+                $"Channel {index + 1}: {slot.ChannelName}",
+                current == AtlasLiveSettings.ChannelEncoderTarget,
+                () => _atlasSettings.Update(s => s.WithEncoderTarget(encoderIndex, AtlasLiveSettings.ChannelEncoderTarget))));
+
+            var outputLabel = output.IsActive
+                ? $"Personal Mix - Audio Output 1: {Shorten(output.OutputName, 64)}"
+                : "Personal Mix - Audio Output 1 (not currently routed)";
+            encoderMenu.DropDownItems.Add(MakeCheckedItem(
+                outputLabel,
+                current == AtlasLiveSettings.PersonalMixOutput1EncoderTarget,
+                () => _atlasSettings.Update(s => s.WithEncoderTarget(encoderIndex, AtlasLiveSettings.PersonalMixOutput1EncoderTarget))));
+
+            _encoderMapMenu.DropDownItems.Add(encoderMenu);
+        }
     }
 
     private void UpdateBackgroundMenu()

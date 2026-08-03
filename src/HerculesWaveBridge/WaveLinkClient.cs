@@ -65,6 +65,16 @@ internal sealed class WaveLinkClient : IDisposable
         return slots;
     }
 
+    public async Task<WaveOutputTarget> GetPersonalMixOutput1Async(CancellationToken cancellationToken)
+    {
+        var mixes = await InvokeAsync<WaveMixesResult>("getMixes", null, cancellationToken)
+            .ConfigureAwait(false);
+        var outputs = await InvokeAsync<WaveOutputDevicesResult>("getOutputDevices", null, cancellationToken)
+            .ConfigureAwait(false);
+
+        return SelectPersonalMixOutput1(mixes, outputs);
+    }
+
     public async Task SetChannelMixVolumeAsync(ChannelSlot slot, double volume01, CancellationToken cancellationToken)
     {
         if (!slot.IsActive || string.IsNullOrWhiteSpace(slot.ChannelId))
@@ -111,6 +121,95 @@ internal sealed class WaveLinkClient : IDisposable
 
         await InvokeAsync<JsonElement>("setChannel", payload, cancellationToken).ConfigureAwait(false);
         _logger.Info($"Wave Link set mute: slot={slot.Index + 1}; channel={slot.ChannelName}; id={slot.ChannelId}; mix={slot.MixId}; muted={isMuted}");
+    }
+
+    public async Task SetOutputVolumeAsync(WaveOutputTarget target, double volume01, CancellationToken cancellationToken)
+    {
+        if (!target.IsActive)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            outputDevice = new
+            {
+                id = target.OutputDeviceId,
+                outputs = new[]
+                {
+                    new
+                    {
+                        id = target.OutputId,
+                        level = Clamp01(volume01)
+                    }
+                }
+            }
+        };
+
+        await InvokeAsync<JsonElement>("setOutputDevice", payload, cancellationToken).ConfigureAwait(false);
+        _logger.Info($"Wave Link set Personal Mix Audio Output 1 volume: output={target.OutputName}; device={target.OutputDeviceId}; id={target.OutputId}; level={Clamp01(volume01):0.00}");
+    }
+
+    public async Task SetOutputMuteAsync(WaveOutputTarget target, bool isMuted, CancellationToken cancellationToken)
+    {
+        if (!target.IsActive)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            outputDevice = new
+            {
+                id = target.OutputDeviceId,
+                outputs = new[]
+                {
+                    new
+                    {
+                        id = target.OutputId,
+                        isMuted
+                    }
+                }
+            }
+        };
+
+        await InvokeAsync<JsonElement>("setOutputDevice", payload, cancellationToken).ConfigureAwait(false);
+        _logger.Info($"Wave Link set Personal Mix Audio Output 1 mute: output={target.OutputName}; device={target.OutputDeviceId}; id={target.OutputId}; muted={isMuted}");
+    }
+
+    internal static WaveOutputTarget SelectPersonalMixOutput1(
+        WaveMixesResult mixesResult,
+        WaveOutputDevicesResult outputsResult)
+    {
+        var mix = mixesResult.Mixes?.FirstOrDefault();
+        if (mix is null)
+        {
+            return WaveOutputTarget.Empty;
+        }
+
+        var match = outputsResult.OutputDevices?
+            .SelectMany(device => (device.Outputs ?? [])
+                .Select(output => new { Device = device, Output = output }))
+            .FirstOrDefault(item => string.Equals(item.Output.MixId, mix.Id, StringComparison.Ordinal));
+
+        if (match is null)
+        {
+            return WaveOutputTarget.Empty with
+            {
+                MixId = mix.Id,
+                MixName = string.IsNullOrWhiteSpace(mix.Name) ? "Personal Mix" : mix.Name
+            };
+        }
+
+        return new WaveOutputTarget(
+            match.Device.Id,
+            match.Output.Id,
+            string.IsNullOrWhiteSpace(match.Output.Name) ? match.Device.Name : match.Output.Name,
+            mix.Id,
+            string.IsNullOrWhiteSpace(mix.Name) ? "Personal Mix" : mix.Name,
+            Clamp01(match.Output.Level),
+            match.Output.IsMuted,
+            true);
     }
 
     public void Dispose()
@@ -358,6 +457,35 @@ internal sealed record WaveChannelMix(
     string? MixId,
     bool? IsMuted,
     double Level);
+
+internal sealed record WaveMixesResult(List<WaveMix>? Mixes);
+
+internal sealed record WaveMix(
+    string Id,
+    string Name,
+    double Level,
+    bool IsMuted);
+
+internal sealed record WaveOutputDevicesResult(
+    WaveMainOutput? MainOutput,
+    List<WaveOutputDevice>? OutputDevices);
+
+internal sealed record WaveMainOutput(
+    string OutputDeviceId,
+    string OutputId);
+
+internal sealed record WaveOutputDevice(
+    string Id,
+    string Name,
+    string? DeviceType,
+    List<WaveOutput>? Outputs);
+
+internal sealed record WaveOutput(
+    string Id,
+    string Name,
+    bool IsMuted,
+    double Level,
+    string? MixId);
 
 internal sealed record JsonRpcEnvelope<T>(
     string Jsonrpc,

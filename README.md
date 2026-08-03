@@ -7,15 +7,17 @@ Elgato Wave Link on Windows.
 
 ## Features
 
-- Four Stream 100 encoders control the first four eligible Wave Link channels.
-- Encoder presses toggle per-mix mute.
+- Four Stream 100 encoders control the first four eligible Wave Link channels by
+  default. Each encoder can instead control Personal Mix Audio Output 1.
+- Encoder presses toggle mute for the selected channel or output target.
 - Live channel names, application icons, volume markers, and Windows Core Audio
   peak meters appear on the Stream 100 display.
 - Action buttons send previous, play/pause, next, and launch Wave Link.
 - Background choices include the built-in console design, a user image, or live
   Spotify album artwork from Windows Global Media Controls.
-- Tray settings cover VU style and color, knob sensitivity, channel-to-process
-  meter overrides, background selection, reconnect actions, and startup.
+- Tray settings cover encoder mapping, VU style and color, knob sensitivity,
+  channel-to-process meter overrides, background selection, reconnect actions,
+  and startup.
 - No audio recording, loopback capture, cloud service, or Spotify login.
 
 ## Requirements
@@ -45,11 +47,15 @@ unknown publisher warning. Release notes include the SHA-256 checksum.
 | Control | Action |
 | --- | --- |
 | Encoder 1-4 turn | Adjust mapped Wave Link channel volume |
-| Encoder 1-4 press | Toggle mapped channel mute |
+| Encoder 1-4 press | Toggle the mapped channel or output mute |
 | Action button 1 | Previous media |
 | Action button 2 | Play/pause |
 | Action button 3 | Next media |
 | Action button 4 | Launch Wave Link |
+
+Use **Encoder Mapping** in the tray menu to switch any encoder from its default
+channel to **Personal Mix - Audio Output 1**. The bridge follows whichever
+physical output is currently routed to Wave Link's first mix.
 
 ## How the vendor runtime is handled
 

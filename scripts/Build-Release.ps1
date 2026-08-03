@@ -17,7 +17,9 @@ $releaseOutput = Join-Path $artifacts 'release'
 New-Item -ItemType Directory -Path $appOutput, $releaseOutput | Out-Null
 
 dotnet restore (Join-Path $root 'HerculesWaveBridge.sln')
+if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE." }
 dotnet test (Join-Path $root 'HerculesWaveBridge.sln') -c Release --no-restore
+if ($LASTEXITCODE -ne 0) { throw "dotnet test failed with exit code $LASTEXITCODE." }
 dotnet publish (Join-Path $root 'src\HerculesWaveBridge\HerculesWaveBridge.csproj') `
     -c Release `
     -r win-x64 `
@@ -27,6 +29,7 @@ dotnet publish (Join-Path $root 'src\HerculesWaveBridge\HerculesWaveBridge.cspro
     -p:DebugType=None `
     -p:DebugSymbols=false `
     -o $appOutput
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
 
 $isccCandidates = @(
     (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
@@ -39,6 +42,7 @@ if (-not $iscc) {
 }
 
 & $iscc (Join-Path $root 'installer\HerculesWaveBridge.iss')
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
 $releaseSetup = Join-Path $releaseOutput 'Hercules-Wave-Bridge-Setup.exe'
 $hash = Get-FileHash -LiteralPath $releaseSetup -Algorithm SHA256
 "$($hash.Hash.ToLowerInvariant())  $($hash.Path | Split-Path -Leaf)" |

@@ -14,10 +14,38 @@ public sealed class EncoderMappingTests
             Assert.Equal(AtlasLiveSettings.ChannelEncoderTarget, settings.EncoderTargetFor(index)));
 
         settings = settings.WithEncoderTarget(2, AtlasLiveSettings.PersonalMixOutput1EncoderTarget);
+        settings = settings.WithEncoderTarget(0, AtlasLiveSettings.PersonalMixEncoderTarget);
 
         Assert.Equal(AtlasLiveSettings.PersonalMixOutput1EncoderTarget, settings.EncoderTargetFor(2));
+        Assert.Equal(AtlasLiveSettings.PersonalMixEncoderTarget, settings.EncoderTargetFor(0));
         Assert.Equal(AtlasLiveSettings.ChannelEncoderTarget, settings.EncoderTargetFor(1));
         Assert.Equal(AtlasLiveSettings.ChannelEncoderTarget, AtlasLiveSettings.NormalizeEncoderTarget("unknown"));
+    }
+
+    [Fact]
+    public void PersonalMixUsesFirstWaveLinkMixLevelAndMuteState()
+    {
+        var mixes = new WaveMixesResult(
+        [
+            new WaveMix("personal-mix", "Personal Mix", 0.64, true),
+            new WaveMix("stream-mix", "Stream Mix", 0.82, false)
+        ]);
+
+        var target = WaveLinkClient.SelectPersonalMix(mixes);
+
+        Assert.True(target.IsActive);
+        Assert.Equal("personal-mix", target.MixId);
+        Assert.Equal("Personal Mix", target.MixName);
+        Assert.Equal(0.64, target.Volume01, 3);
+        Assert.True(target.IsMuted);
+    }
+
+    [Fact]
+    public void PersonalMixIsInactiveWhenWaveLinkReturnsNoMixes()
+    {
+        var target = WaveLinkClient.SelectPersonalMix(new WaveMixesResult([]));
+
+        Assert.False(target.IsActive);
     }
 
     [Fact]

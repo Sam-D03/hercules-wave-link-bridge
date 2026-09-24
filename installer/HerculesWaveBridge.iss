@@ -1,5 +1,5 @@
 #define MyAppName "Hercules Wave Bridge"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "Sam-D03"
 #define MyAppURL "https://github.com/Sam-D03/hercules-wave-link-bridge"
 #define MyAppExeName "HerculesWaveBridge.exe"

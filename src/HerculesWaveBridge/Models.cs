@@ -37,6 +37,21 @@ internal sealed record WaveOutputTarget(
         false);
 }
 
+internal sealed record WaveMixTarget(
+    string MixId,
+    string MixName,
+    double Volume01,
+    bool IsMuted,
+    bool IsActive)
+{
+    public static WaveMixTarget Empty { get; } = new(
+        string.Empty,
+        "Personal Mix unavailable",
+        0,
+        false,
+        false);
+}
+
 internal sealed record LiveMeterSnapshot(
     int SlotIndex,
     double SourcePeak01,

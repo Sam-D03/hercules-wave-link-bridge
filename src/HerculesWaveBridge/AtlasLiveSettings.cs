@@ -22,6 +22,7 @@ internal sealed record AtlasLiveSettings(
     string? EncoderTarget3)
 {
     public const string ChannelEncoderTarget = "channel";
+    public const string PersonalMixEncoderTarget = "personal-mix";
     public const string PersonalMixOutput1EncoderTarget = "personal-mix-output-1";
 
     public static AtlasLiveSettings Default { get; } = new(
@@ -90,10 +91,17 @@ internal sealed record AtlasLiveSettings(
     public static string NormalizeOverride(string? value) =>
         string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
 
-    public static string NormalizeEncoderTarget(string? value) =>
-        string.Equals(value, PersonalMixOutput1EncoderTarget, StringComparison.OrdinalIgnoreCase)
+    public static string NormalizeEncoderTarget(string? value)
+    {
+        if (string.Equals(value, PersonalMixEncoderTarget, StringComparison.OrdinalIgnoreCase))
+        {
+            return PersonalMixEncoderTarget;
+        }
+
+        return string.Equals(value, PersonalMixOutput1EncoderTarget, StringComparison.OrdinalIgnoreCase)
             ? PersonalMixOutput1EncoderTarget
             : ChannelEncoderTarget;
+    }
 }
 
 internal sealed class AtlasLiveSettingsStore

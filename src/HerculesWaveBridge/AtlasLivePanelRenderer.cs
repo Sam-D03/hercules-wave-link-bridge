@@ -103,7 +103,8 @@ internal sealed class AtlasLivePanelRenderer
 
     public byte[] RenderChannelIcon(ChannelSlot slot)
     {
-        if (slot.ChannelType.Equals("Output", StringComparison.OrdinalIgnoreCase))
+        if (slot.ChannelType.Equals("Output", StringComparison.OrdinalIgnoreCase) ||
+            slot.ChannelType.Equals("Mix", StringComparison.OrdinalIgnoreCase))
         {
             _waveLinkPixels ??= TryRenderImageIcon(_waveLinkIconPath);
             if (_waveLinkPixels is not null)

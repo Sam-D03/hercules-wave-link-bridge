@@ -65,14 +65,15 @@ internal sealed class WaveLinkClient : IDisposable
         return slots;
     }
 
-    public async Task<WaveOutputTarget> GetPersonalMixOutput1Async(CancellationToken cancellationToken)
+    public async Task<(WaveMixTarget Mix, WaveOutputTarget Output1)> GetPersonalMixTargetsAsync(
+        CancellationToken cancellationToken)
     {
         var mixes = await InvokeAsync<WaveMixesResult>("getMixes", null, cancellationToken)
             .ConfigureAwait(false);
         var outputs = await InvokeAsync<WaveOutputDevicesResult>("getOutputDevices", null, cancellationToken)
             .ConfigureAwait(false);
 
-        return SelectPersonalMixOutput1(mixes, outputs);
+        return (SelectPersonalMix(mixes), SelectPersonalMixOutput1(mixes, outputs));
     }
 
     public async Task SetChannelMixVolumeAsync(ChannelSlot slot, double volume01, CancellationToken cancellationToken)
@@ -175,6 +176,53 @@ internal sealed class WaveLinkClient : IDisposable
 
         await InvokeAsync<JsonElement>("setOutputDevice", payload, cancellationToken).ConfigureAwait(false);
         _logger.Info($"Wave Link set Personal Mix Audio Output 1 mute: output={target.OutputName}; device={target.OutputDeviceId}; id={target.OutputId}; muted={isMuted}");
+    }
+
+    public async Task SetMixVolumeAsync(WaveMixTarget target, double volume01, CancellationToken cancellationToken)
+    {
+        if (!target.IsActive)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            id = target.MixId,
+            level = Clamp01(volume01)
+        };
+
+        await InvokeAsync<JsonElement>("setMix", payload, cancellationToken).ConfigureAwait(false);
+        _logger.Info($"Wave Link set Personal Mix volume: mix={target.MixId}; level={Clamp01(volume01):0.00}");
+    }
+
+    public async Task SetMixMuteAsync(WaveMixTarget target, bool isMuted, CancellationToken cancellationToken)
+    {
+        if (!target.IsActive)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            id = target.MixId,
+            isMuted
+        };
+
+        await InvokeAsync<JsonElement>("setMix", payload, cancellationToken).ConfigureAwait(false);
+        _logger.Info($"Wave Link set Personal Mix mute: mix={target.MixId}; muted={isMuted}");
+    }
+
+    internal static WaveMixTarget SelectPersonalMix(WaveMixesResult mixesResult)
+    {
+        var mix = mixesResult.Mixes?.FirstOrDefault();
+        return mix is null
+            ? WaveMixTarget.Empty
+            : new WaveMixTarget(
+                mix.Id,
+                string.IsNullOrWhiteSpace(mix.Name) ? "Personal Mix" : mix.Name,
+                Clamp01(mix.Level),
+                mix.IsMuted,
+                true);
     }
 
     internal static WaveOutputTarget SelectPersonalMixOutput1(

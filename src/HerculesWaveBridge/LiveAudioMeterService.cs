@@ -220,7 +220,7 @@ internal sealed class LiveAudioMeterService : IDisposable
                 continue;
             }
 
-            if (IsOutputSlot(slot))
+            if (IsOutputSlot(slot) || IsMixSlot(slot))
             {
                 var outputBinding = TryCreateEndpointBinding(slot.ChannelId, disposables);
                 slotBindings[index] = outputBinding;
@@ -542,6 +542,9 @@ internal sealed class LiveAudioMeterService : IDisposable
 
     private static bool IsOutputSlot(ChannelSlot slot) =>
         slot.ChannelType.Equals("Output", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsMixSlot(ChannelSlot slot) =>
+        slot.ChannelType.Equals("Mix", StringComparison.OrdinalIgnoreCase);
 
     private static bool MatchesSlot(ChannelSlot slot, SessionCandidate candidate)
     {

@@ -8,7 +8,8 @@ Elgato Wave Link on Windows.
 ## Features
 
 - Four Stream 100 encoders control the first four eligible Wave Link channels by
-  default. Each encoder can instead control Personal Mix Audio Output 1.
+  default. Each encoder can instead control Personal Mix itself or Personal Mix
+  Audio Output 1.
 - Encoder presses toggle mute for the selected channel or output target.
 - Live channel names, application icons, volume markers, and Windows Core Audio
   peak meters appear on the Stream 100 display.
@@ -54,8 +55,9 @@ unknown publisher warning. Release notes include the SHA-256 checksum.
 | Action button 4 | Launch Wave Link |
 
 Use **Encoder Mapping** in the tray menu to switch any encoder from its default
-channel to **Personal Mix - Audio Output 1**. The bridge follows whichever
-physical output is currently routed to Wave Link's first mix.
+channel to **Personal Mix** or **Personal Mix - Audio Output 1**. Personal Mix
+changes Wave Link's mix-level fader; Audio Output 1 changes the physical output
+level and follows whichever device is currently routed to the first mix.
 
 ## How the vendor runtime is handled
 

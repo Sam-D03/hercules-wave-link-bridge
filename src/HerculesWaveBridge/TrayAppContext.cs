@@ -190,10 +190,21 @@ internal sealed class TrayAppContext : ApplicationContext
         foreach (var slot in slots)
         {
             var target = _atlasSettings.Current.EncoderTargetFor(slot.Index);
+            var targetLabel = target switch
+            {
+                AtlasLiveSettings.PersonalMixEncoderTarget => "Personal Mix",
+                AtlasLiveSettings.PersonalMixOutput1EncoderTarget => "Personal Mix Output 1",
+                _ => "channel"
+            };
             _statusItem.DropDownItems.Add(slot.IsActive
-                ? $"{slot.Index + 1}. {slot.ChannelName} {Math.Round(slot.Volume01 * 100):0}% {(slot.IsMuted ? "muted" : "")} - encoder: {(target == AtlasLiveSettings.PersonalMixOutput1EncoderTarget ? "Personal Mix Output 1" : "channel")}"
+                ? $"{slot.Index + 1}. {slot.ChannelName} {Math.Round(slot.Volume01 * 100):0}% {(slot.IsMuted ? "muted" : "")} - encoder: {targetLabel}"
                 : $"{slot.Index + 1}. Empty");
         }
+
+        var mix = _controller.PersonalMix;
+        _statusItem.DropDownItems.Add(mix.IsActive
+            ? $"Personal Mix: {Math.Round(mix.Volume01 * 100):0}% {(mix.IsMuted ? "muted" : "")}"
+            : "Personal Mix: unavailable");
 
         var output = _controller.PersonalMixOutput1;
         _statusItem.DropDownItems.Add(output.IsActive
@@ -377,6 +388,7 @@ internal sealed class TrayAppContext : ApplicationContext
     {
         var settings = _atlasSettings.Current;
         var slots = _controller.Slots;
+        var mix = _controller.PersonalMix;
         var output = _controller.PersonalMixOutput1;
         _encoderMapMenu.DropDownItems.Clear();
 
@@ -388,9 +400,12 @@ internal sealed class TrayAppContext : ApplicationContext
         {
             var slot = index < slots.Count ? slots[index] : ChannelSlot.Empty(index);
             var current = settings.EncoderTargetFor(index);
-            var currentLabel = current == AtlasLiveSettings.PersonalMixOutput1EncoderTarget
-                ? "Personal Mix Output 1"
-                : $"Channel {index + 1}";
+            var currentLabel = current switch
+            {
+                AtlasLiveSettings.PersonalMixEncoderTarget => "Personal Mix",
+                AtlasLiveSettings.PersonalMixOutput1EncoderTarget => "Personal Mix Output 1",
+                _ => $"Channel {index + 1}"
+            };
             var encoderMenu = new ToolStripMenuItem($"Encoder {index + 1} - {currentLabel}");
             WirePersistentDropDown(encoderMenu);
             var encoderIndex = index;
@@ -399,6 +414,14 @@ internal sealed class TrayAppContext : ApplicationContext
                 $"Channel {index + 1}: {slot.ChannelName}",
                 current == AtlasLiveSettings.ChannelEncoderTarget,
                 () => _atlasSettings.Update(s => s.WithEncoderTarget(encoderIndex, AtlasLiveSettings.ChannelEncoderTarget))));
+
+            var mixLabel = mix.IsActive
+                ? $"Personal Mix: {Math.Round(mix.Volume01 * 100):0}%"
+                : "Personal Mix (unavailable)";
+            encoderMenu.DropDownItems.Add(MakeCheckedItem(
+                mixLabel,
+                current == AtlasLiveSettings.PersonalMixEncoderTarget,
+                () => _atlasSettings.Update(s => s.WithEncoderTarget(encoderIndex, AtlasLiveSettings.PersonalMixEncoderTarget))));
 
             var outputLabel = output.IsActive
                 ? $"Personal Mix - Audio Output 1: {Shorten(output.OutputName, 64)}"

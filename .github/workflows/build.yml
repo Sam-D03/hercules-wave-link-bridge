@@ -5,9 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -21,5 +26,6 @@ jobs:
         run: ./scripts/Build-Release.ps1
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: hercules-wave-bridge-windows
           path: artifacts/release/*
